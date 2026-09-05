@@ -1,0 +1,54 @@
+# Local infrastructure for the distributed-saga-engine.
+#
+# ONE PostgreSQL instance hosting three ISOLATED logical databases (database-per-service),
+# and ONE Redis instance acting as both the Pub/Sub message broker and the idempotency store.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: saga_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      # Bootstrap database created by the entrypoint; init-db.sql creates the other two.
+      POSTGRES_DB: ${ORDER_DB_NAME}
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Executed by the postgres entrypoint on FIRST initialisation only.
+      - ./docker/postgres/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${ORDER_DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - saga_net
+
+  redis:
+    image: redis:7-alpine
+    container_name: saga_redis
+    restart: unless-stopped
+    # appendonly keeps idempotency keys alive across a broker restart.
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_PORT}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - saga_net
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  saga_net:
+    driver: bridge
