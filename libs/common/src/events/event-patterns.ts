@@ -1,11 +1,3 @@
-/**
- * The complete set of message patterns exchanged across the saga.
- *
- * These strings are the Redis Pub/Sub channel names. Every service imports
- * them from here, so a publisher and a consumer can never drift apart by a
- * typo — a misspelled channel is a compile error rather than an event that
- * silently vanishes into a channel nobody subscribes to.
- */
 export const SAGA_EVENTS = {
   ORDER_CREATED: 'order_created',
   INVENTORY_RESERVED: 'inventory_reserved',

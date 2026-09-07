@@ -3,15 +3,6 @@ import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 import { REDIS_CLIENT } from './redis.module';
 
-/**
- * Event de-duplication backed by Redis.
- *
- * Redis Pub/Sub gives at-most-once delivery, but a service that restarts
- * mid-handler, or a manually replayed event, can still deliver the same
- * eventId twice. Without a guard, a replayed `order_created` would deduct
- * stock a second time and a replayed `inventory_released` would restore it
- * twice — the ledger would drift with no error anywhere.
- */
 @Injectable()
 export class IdempotencyService {
   private readonly logger = new Logger(IdempotencyService.name);
@@ -24,22 +15,13 @@ export class IdempotencyService {
     this.ttlSeconds = Number(config.get<string>('IDEMPOTENCY_TTL_SECONDS') ?? 86400);
   }
 
-  /**
-   * The key is scoped by consumer, not just by eventId.
-   *
-   * `payment_failed` is consumed by BOTH order-service and inventory-service.
-   * A key of just the eventId would let whichever service handled it first
-   * lock the other one out, silently skipping the compensating transaction.
-   */
+  // Scoped by consumer, not just eventId: payment_failed is consumed by both
+  // order-service and inventory-service, and a shared key would let whichever
+  // handled it first lock the other out of its compensating transaction.
   private key(consumer: string, eventId: string): string {
     return `saga:idempotency:${consumer}:${eventId}`;
   }
 
-  /**
-   * Atomically claims an event. Returns true exactly once per (consumer,
-   * eventId) pair within the TTL window. SET NX is a single round trip, so
-   * two concurrent deliveries cannot both win.
-   */
   async claim(consumer: string, eventId: string): Promise<boolean> {
     const result = await this.redis.set(
       this.key(consumer, eventId),
@@ -51,18 +33,11 @@ export class IdempotencyService {
     return result === 'OK';
   }
 
-  /** Releases a claim so a redelivery can retry. Used when a handler throws. */
   async release(consumer: string, eventId: string): Promise<void> {
     await this.redis.del(this.key(consumer, eventId));
   }
 
-  /**
-   * Runs `handler` at most once for this (consumer, eventId).
-   *
-   * Returns false when the event was a duplicate and the handler was skipped.
-   * If the handler throws, the claim is released before rethrowing so the
-   * event is not permanently swallowed by a transient failure.
-   */
+  /** Returns false when the event was a duplicate and the handler was skipped. */
   async runOnce(
     consumer: string,
     eventId: string,
@@ -76,6 +51,7 @@ export class IdempotencyService {
       await handler();
       return true;
     } catch (error) {
+      // Release so a redelivery can retry rather than being swallowed.
       await this.release(consumer, eventId);
       this.logger.error(
         `handler failed for eventId=${eventId}, claim released for retry`,

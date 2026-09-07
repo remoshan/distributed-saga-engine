@@ -1,12 +1,5 @@
 import { SagaEvent } from './saga-event';
 
-/**
- * Emitted by inventory-service when stock is insufficient.
- *
- * This terminates the saga immediately: nothing was reserved, so there is
- * nothing to compensate. order-service cancels the order and no payment is
- * ever attempted.
- */
 export class InventoryFailedEvent extends SagaEvent {
   readonly orderId: string;
   readonly reason: string;

@@ -1,6 +1,5 @@
 import { OrderLineItem, SagaEvent } from './saga-event';
 
-/** Emitted by order-service once an order row exists in PENDING state. */
 export class OrderCreatedEvent extends SagaEvent {
   readonly orderId: string;
   readonly customerId: string;

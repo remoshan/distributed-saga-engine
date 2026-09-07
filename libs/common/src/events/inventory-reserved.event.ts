@@ -1,6 +1,5 @@
 import { OrderLineItem, SagaEvent } from './saga-event';
 
-/** Emitted by inventory-service after stock has been deducted successfully. */
 export class InventoryReservedEvent extends SagaEvent {
   readonly orderId: string;
   readonly customerId: string;

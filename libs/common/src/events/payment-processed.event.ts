@@ -1,6 +1,5 @@
 import { SagaEvent } from './saga-event';
 
-/** Emitted by payment-service when the charge succeeds. Completes the saga. */
 export class PaymentProcessedEvent extends SagaEvent {
   readonly orderId: string;
   readonly paymentId: string;
