@@ -40,7 +40,13 @@ export class OrderService {
       }),
     );
 
-    this.log.stateChanged('Order', order.id, 'NEW', OrderStatus.PENDING, correlationId);
+    this.log.stateChanged(
+      'Order',
+      order.id,
+      'NEW',
+      OrderStatus.PENDING,
+      correlationId,
+    );
 
     const event = new OrderCreatedEvent({
       correlationId,
@@ -82,7 +88,12 @@ export class OrderService {
     reason: string,
     correlationId: string,
   ): Promise<void> {
-    await this.transition(orderId, OrderStatus.CANCELLED, reason, correlationId);
+    await this.transition(
+      orderId,
+      OrderStatus.CANCELLED,
+      reason,
+      correlationId,
+    );
   }
 
   private async transition(

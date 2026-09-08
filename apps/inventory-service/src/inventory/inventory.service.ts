@@ -13,8 +13,7 @@ const SEED: ReadonlyArray<[string, number]> = [
 ];
 
 export type ReserveResult =
-  | { ok: true }
-  | { ok: false; reason: string; productId: string };
+  { ok: true } | { ok: false; reason: string; productId: string };
 
 @Injectable()
 export class InventoryService implements OnModuleInit {
@@ -27,7 +26,9 @@ export class InventoryService implements OnModuleInit {
     if ((await repo.count()) > 0) {
       return;
     }
-    await repo.save(SEED.map(([productId, quantity]) => repo.create({ productId, quantity })));
+    await repo.save(
+      SEED.map(([productId, quantity]) => repo.create({ productId, quantity })),
+    );
     this.logger.log(`seeded ${SEED.length} stock items`);
   }
 
@@ -40,7 +41,11 @@ export class InventoryService implements OnModuleInit {
         });
 
         if (!stock) {
-          return { ok: false, reason: `unknown product ${item.productId}`, productId: item.productId };
+          return {
+            ok: false,
+            reason: `unknown product ${item.productId}`,
+            productId: item.productId,
+          };
         }
         if (stock.quantity < item.quantity) {
           return {
@@ -68,10 +73,6 @@ export class InventoryService implements OnModuleInit {
         );
       }
     });
-  }
-
-  async levels(): Promise<StockItem[]> {
-    return this.db.getRepository(StockItem).find({ order: { productId: 'ASC' } });
   }
 
   // Consistent lock ordering: two concurrent sagas touching the same SKUs in

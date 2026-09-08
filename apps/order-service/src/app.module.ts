@@ -16,7 +16,9 @@ import { OrderModule } from './order/order.module';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) =>
-        postgresOptions(config, config.getOrThrow<string>('ORDER_DB_NAME'), [Order]),
+        postgresOptions(config, config.getOrThrow<string>('ORDER_DB_NAME'), [
+          Order,
+        ]),
     }),
     OrderModule,
   ],

@@ -21,7 +21,9 @@ export class OrderEventsController {
   ) {}
 
   @EventPattern(SAGA_EVENTS.PAYMENT_PROCESSED)
-  async onPaymentProcessed(@Payload() event: PaymentProcessedEvent): Promise<void> {
+  async onPaymentProcessed(
+    @Payload() event: PaymentProcessedEvent,
+  ): Promise<void> {
     this.log.received(SAGA_EVENTS.PAYMENT_PROCESSED, event, {
       orderId: event.orderId,
       amount: event.amount,
@@ -64,7 +66,9 @@ export class OrderEventsController {
   }
 
   @EventPattern(SAGA_EVENTS.INVENTORY_FAILED)
-  async onInventoryFailed(@Payload() event: InventoryFailedEvent): Promise<void> {
+  async onInventoryFailed(
+    @Payload() event: InventoryFailedEvent,
+  ): Promise<void> {
     this.log.received(SAGA_EVENTS.INVENTORY_FAILED, event, {
       orderId: event.orderId,
       reason: event.reason,

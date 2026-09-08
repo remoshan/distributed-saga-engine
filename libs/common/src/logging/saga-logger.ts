@@ -8,21 +8,35 @@ export class SagaLogger {
     this.logger = new Logger(context);
   }
 
-  published(pattern: SagaEventPattern, event: SagaEventEnvelope, detail?: Record<string, unknown>): void {
+  published(
+    pattern: SagaEventPattern,
+    event: SagaEventEnvelope,
+    detail?: Record<string, unknown>,
+  ): void {
     this.logger.log(this.line('PUBLISH  ', pattern, event, detail));
   }
 
-  received(pattern: SagaEventPattern, event: SagaEventEnvelope, detail?: Record<string, unknown>): void {
+  received(
+    pattern: SagaEventPattern,
+    event: SagaEventEnvelope,
+    detail?: Record<string, unknown>,
+  ): void {
     this.logger.log(this.line('RECEIVE  ', pattern, event, detail));
   }
 
   skipped(pattern: SagaEventPattern, event: SagaEventEnvelope): void {
     this.logger.warn(
-      this.line('DUPLICATE', pattern, event, { action: 'skipped, state unchanged' }),
+      this.line('DUPLICATE', pattern, event, {
+        action: 'skipped, state unchanged',
+      }),
     );
   }
 
-  compensating(pattern: SagaEventPattern, event: SagaEventEnvelope, detail?: Record<string, unknown>): void {
+  compensating(
+    pattern: SagaEventPattern,
+    event: SagaEventEnvelope,
+    detail?: Record<string, unknown>,
+  ): void {
     this.logger.warn(this.line('COMPENSATE', pattern, event, detail));
   }
 
@@ -38,7 +52,11 @@ export class SagaLogger {
     );
   }
 
-  rejected(reason: string, correlationId: string, detail?: Record<string, unknown>): void {
+  rejected(
+    reason: string,
+    correlationId: string,
+    detail?: Record<string, unknown>,
+  ): void {
     this.logger.warn(
       `REJECT    ${reason} [correlationId=${correlationId}]${this.format(detail)}`,
     );
@@ -58,7 +76,10 @@ export class SagaLogger {
       return '';
     }
     const pairs = Object.entries(detail)
-      .map(([key, value]) => `${key}=${typeof value === 'object' ? JSON.stringify(value) : String(value)}`)
+      .map(
+        ([key, value]) =>
+          `${key}=${typeof value === 'object' ? JSON.stringify(value) : String(value)}`,
+      )
       .join(' ');
     return ` ${pairs}`;
   }

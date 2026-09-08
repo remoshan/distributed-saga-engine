@@ -1,114 +1,259 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# distributed-saga-engine
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Event-driven microservices demonstrating the **Choreographed Saga pattern** — distributed
+transactions and compensating rollbacks across three services with no central
+orchestrator and no cross-service database locks.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Architecture
 
-## Description
-
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
-
-## Project setup
-
-```bash
-$ npm install
+```
+                    Redis Pub/Sub
+                          |
+  order-service      inventory-service      payment-service
+   (HTTP :3000)        (consumer)             (consumer)
+        |                   |                      |
+    order_db          inventory_db            payment_db
 ```
 
-## Compile and run the project
+Each service owns its own logical database and can only reach its own. Services
+communicate solely by publishing and consuming events.
+
+### Saga flow
+
+| Step | Service | Consumes | Emits |
+|------|---------|----------|-------|
+| 1 | order-service | `POST /orders` | `order_created` |
+| 2 | inventory-service | `order_created` | `inventory_reserved` or `inventory_failed` |
+| 3 | payment-service | `inventory_reserved` | `payment_processed` or `payment_failed` |
+| 4 | order-service | `payment_processed` | order → `COMPLETED` |
+| 4' | order-service | `payment_failed` / `inventory_failed` | order → `CANCELLED` |
+| 4' | inventory-service | `payment_failed` | restores stock, emits `inventory_released` |
+
+`payment_failed` fans out to two independent consumers — neither knows the other
+exists. That mutual ignorance is what makes this choreography rather than
+orchestration.
+
+## Stack
+
+NestJS 11 (CommonJS) · TypeScript · Redis Pub/Sub via `@nestjs/microservices` ·
+PostgreSQL + TypeORM · Docker Compose
+
+## Setup
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+docker compose up -d     # postgres :5433, redis :6379
+npm install
 ```
 
-## Run tests
+Configuration lives in a single `.env` at the repo root (gitignored). Required keys:
+
+```
+POSTGRES_HOST POSTGRES_PORT POSTGRES_USER POSTGRES_PASSWORD
+ORDER_DB_NAME INVENTORY_DB_NAME PAYMENT_DB_NAME
+TYPEORM_SYNCHRONIZE TYPEORM_LOGGING
+REDIS_HOST REDIS_PORT
+IDEMPOTENCY_TTL_SECONDS PAYMENT_SIMULATE_FAILURE
+ORDER_SERVICE_HTTP_PORT
+```
+
+## Run
+
+Three terminals:
 
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+npm run start:order
+npm run start:inventory
+npm run start:payment
 ```
 
-## Deployment
+## Design notes
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+**Correlation IDs** — minted once when an order is placed and copied onto every
+downstream event, so one saga is traceable across three service logs by a single value.
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+**Idempotency** — every consumed event is claimed in Redis with `SET NX EX` before its
+handler runs. Keys are scoped per consumer (`saga:idempotency:{service}:{eventId}`)
+because one event may legitimately be handled by two different services.
+
+**Semantic lock** — `OrderStatus.PENDING` marks a row as in-flight. Sagas give up ACID
+isolation; this is the countermeasure that stops a reader treating an unsettled order
+as final.
+
+**Known gap: dual write.** A service commits its state change and publishes its event as
+two separate operations. A crash between them strands the saga. The fix is the
+Transactional Outbox pattern — marked `KNOWN GAP` in `order.service.ts`.
+
+## Verification
+
+Start the infrastructure and all three services, then run the scenarios below.
+UUIDs in the sample output are shortened for readability.
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+docker compose up -d
+npm run start:order       # terminal 1
+npm run start:inventory   # terminal 2
+npm run start:payment     # terminal 3
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+Stock is seeded on first boot: `SKU-LAPTOP` 10, `SKU-MOUSE` 100, `SKU-KEYBOARD` 50,
+`SKU-DESK` 5, `SKU-CHAIR` 3.
 
-## Observability
+### 1. Happy path
 
-In production applications, observability is essential for understanding how your system behaves, detecting issues early, and maintaining reliable performance.
+Requires `PAYMENT_SIMULATE_FAILURE=false` in `.env`.
 
-[NestJS Observe](https://observe.nestjs.com) automatically instruments your NestJS application, giving you deep visibility into your system with minimal setup:
+```bash
+curl -X POST http://localhost:3000/orders \
+  -H "Content-Type: application/json" \
+  -d '{"customerId":"cust-001","items":[{"productId":"SKU-LAPTOP","quantity":2,"unitPrice":899.50},{"productId":"SKU-MOUSE","quantity":1,"unitPrice":25.00}]}'
+```
 
-- **Distributed tracing:** Follow requests across services and understand how they flow through your system.
-- **Waterfall analysis:** Visualize request execution and identify slow operations, bottlenecks, and unexpected delays.
-- **Performance analysis:** Analyze application performance in real time and quickly pinpoint areas that need optimization.
-- **Metrics:** Track key application and infrastructure metrics to understand system health and performance trends.
-- **Logging:** Centralize and correlate logs with traces and other telemetry to make debugging easier.
-- **Error tracking:** Detect errors quickly and investigate their root causes with the surrounding context.
-- **SLA monitoring:** Track service-level objectives and identify when your application is approaching or exceeding defined thresholds.
-- **Alarms and alerts:** Set up alerts for critical errors, performance degradation, SLA violations, and other anomalies so your team can react quickly.
+`202 Accepted` — the saga has started, the outcome is not known yet:
 
-## Resources
+```json
+{
+  "orderId": "2d2618c6-...",
+  "correlationId": "700da01e-...",
+  "status": "PENDING",
+  "statusUrl": "/orders/2d2618c6-...",
+  "message": "Saga started. Poll statusUrl for the final outcome."
+}
+```
 
-Check out a few resources that may come in handy when working with NestJS:
+Console output across the three services:
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Auto-instrument your application with [NestJS Observer](https://observer.nestjs.com). Distributed tracing, metrics, and logging made easy. Error tracking and performance monitoring for your NestJS applications.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+```
+[order-service]     STATE     Order(2d2618c6) NEW -> PENDING
+[order-service]     PUBLISH   order_created        totalAmount=1824
+[inventory-service] RECEIVE   order_created
+[inventory-service] PUBLISH   inventory_reserved
+[payment-service]   RECEIVE   inventory_reserved   amount=1824
+[payment-service]   PUBLISH   payment_processed    paymentId=5208e617
+[order-service]     RECEIVE   payment_processed    amount=1824
+[order-service]     STATE     Order(2d2618c6) PENDING -> COMPLETED
+```
 
-## Support
+Poll the outcome:
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+```bash
+curl http://localhost:3000/orders/<orderId>
+```
 
-## Stay in touch
+```json
+{ "status": "COMPLETED", "totalAmount": 1824, "failureReason": null }
+```
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+Stock drops from 10 → 8 (`SKU-LAPTOP`) and 100 → 99 (`SKU-MOUSE`); the `payments` row
+is `SUCCEEDED`.
 
-## License
+### 2. Compensating path — payment declined
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+Set `PAYMENT_SIMULATE_FAILURE=true` in `.env` and restart payment-service only.
+It logs its mode on boot:
+
+```
+[Bootstrap] payment-service subscribed to Redis Pub/Sub (simulate failure: true)
+```
+
+```bash
+curl -X POST http://localhost:3000/orders \
+  -H "Content-Type: application/json" \
+  -d '{"customerId":"cust-002","items":[{"productId":"SKU-LAPTOP","quantity":2,"unitPrice":899.50}]}'
+```
+
+```
+[order-service]     STATE      Order(55638586) NEW -> PENDING
+[order-service]     PUBLISH    order_created        totalAmount=1799
+[inventory-service] RECEIVE    order_created
+[inventory-service] PUBLISH    inventory_reserved                     stock 8 -> 6
+[payment-service]   RECEIVE    inventory_reserved   amount=1799
+[payment-service]   REJECT     card declined by issuer (simulated)
+[payment-service]   PUBLISH    payment_failed
+[order-service]     RECEIVE    payment_failed
+[order-service]     STATE      Order(55638586) PENDING -> CANCELLED
+[inventory-service] COMPENSATE payment_failed
+[inventory-service] PUBLISH    inventory_released                     stock 6 -> 8
+```
+
+```json
+{
+  "status": "CANCELLED",
+  "failureReason": "Payment failed: card declined by issuer (simulated)"
+}
+```
+
+Stock returns to 8 — deducted, then restored by the compensating transaction. The
+`payments` row is `DECLINED`.
+
+Note `payment_failed` is consumed by **two** services independently. order-service
+cancels the order; inventory-service restores stock. Neither knows the other is
+listening.
+
+### 3. Short-circuit path — insufficient stock
+
+`SKU-CHAIR` has 3 in stock:
+
+```bash
+curl -X POST http://localhost:3000/orders \
+  -H "Content-Type: application/json" \
+  -d '{"customerId":"cust-003","items":[{"productId":"SKU-CHAIR","quantity":5,"unitPrice":80.00}]}'
+```
+
+```
+[order-service]     STATE     Order(139c0974) NEW -> PENDING
+[order-service]     PUBLISH   order_created        totalAmount=400
+[inventory-service] RECEIVE   order_created
+[inventory-service] REJECT    insufficient stock for SKU-CHAIR: have 3, need 5
+[inventory-service] PUBLISH   inventory_failed
+[order-service]     RECEIVE   inventory_failed
+[order-service]     STATE     Order(139c0974) PENDING -> CANCELLED
+```
+
+```json
+{
+  "status": "CANCELLED",
+  "failureReason": "Inventory failed: insufficient stock for SKU-CHAIR: have 3, need 5"
+}
+```
+
+No stock was reserved and no payment row is created — there is nothing to compensate,
+so the saga simply ends.
+
+### 4. Idempotency
+
+Replay a consumed event by publishing it again with the same `eventId`:
+
+```bash
+docker exec saga_redis redis-cli publish payment_processed \
+  '{"pattern":"payment_processed","data":{"eventId":"evt-001","correlationId":"<corr>","occurredAt":"2026-01-01T00:00:00.000Z","orderId":"<orderId>","paymentId":"p1","amount":1824}}'
+```
+
+The first delivery transitions the order. The second is suppressed:
+
+```
+[order-service] RECEIVE   payment_processed
+[order-service] DUPLICATE payment_processed  action=skipped, state unchanged
+```
+
+Keys are scoped per consumer, so one event replayed produces one key per service:
+
+```bash
+docker exec saga_redis redis-cli keys "saga:idempotency:*"
+# saga:idempotency:order-service:evt-001
+# saga:idempotency:inventory-service:evt-001
+```
+
+### Inspecting state
+
+```bash
+docker exec saga_postgres psql -U saga -d order_db     -c "SELECT id, status, \"failureReason\" FROM orders"
+docker exec saga_postgres psql -U saga -d inventory_db -c "SELECT * FROM stock_items ORDER BY 1"
+docker exec saga_postgres psql -U saga -d payment_db   -c "SELECT \"orderId\", amount, status FROM payments"
+```
+
+Database isolation holds — each table exists in exactly one database:
+
+```bash
+docker exec saga_postgres psql -U saga -d inventory_db -tAc \
+  "SELECT count(*) FROM information_schema.tables WHERE table_name='orders'"   # 0
+```

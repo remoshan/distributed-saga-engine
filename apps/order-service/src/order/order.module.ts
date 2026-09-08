@@ -1,4 +1,8 @@
-import { IdempotencyModule, SAGA_CLIENT, redisTransportOptions } from '@app/common';
+import {
+  IdempotencyModule,
+  SAGA_CLIENT,
+  redisTransportOptions,
+} from '@app/common';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ClientsModule } from '@nestjs/microservices';

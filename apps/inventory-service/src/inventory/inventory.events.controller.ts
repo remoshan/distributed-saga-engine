@@ -26,7 +26,9 @@ export class InventoryEventsController {
 
   @EventPattern(SAGA_EVENTS.ORDER_CREATED)
   async onOrderCreated(@Payload() event: OrderCreatedEvent): Promise<void> {
-    this.log.received(SAGA_EVENTS.ORDER_CREATED, event, { orderId: event.orderId });
+    this.log.received(SAGA_EVENTS.ORDER_CREATED, event, {
+      orderId: event.orderId,
+    });
 
     const executed = await this.idempotency.runOnce(
       InventoryEventsController.CONSUMER,
@@ -49,7 +51,9 @@ export class InventoryEventsController {
           return;
         }
 
-        this.log.rejected(result.reason, event.correlationId, { orderId: event.orderId });
+        this.log.rejected(result.reason, event.correlationId, {
+          orderId: event.orderId,
+        });
         const failed = new InventoryFailedEvent({
           correlationId: event.correlationId,
           orderId: event.orderId,
@@ -57,7 +61,9 @@ export class InventoryEventsController {
           productId: result.productId,
         });
         this.client.emit(SAGA_EVENTS.INVENTORY_FAILED, failed);
-        this.log.published(SAGA_EVENTS.INVENTORY_FAILED, failed, { orderId: event.orderId });
+        this.log.published(SAGA_EVENTS.INVENTORY_FAILED, failed, {
+          orderId: event.orderId,
+        });
       },
     );
 
@@ -78,7 +84,10 @@ export class InventoryEventsController {
       event.eventId,
       async () => {
         if (!event.items?.length) {
-          this.log.rejected('payment_failed carried no items to restore', event.correlationId);
+          this.log.rejected(
+            'payment_failed carried no items to restore',
+            event.correlationId,
+          );
           return;
         }
 
