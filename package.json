@@ -4,7 +4,7 @@
   "description": "Choreographed Saga pattern over Redis Pub/Sub with database-per-service PostgreSQL",
   "author": "",
   "private": true,
-  "license": "UNLICENSED",
+  "license": "MIT",
   "scripts": {
     "build:all": "nest build common && nest build order-service && nest build inventory-service && nest build payment-service",
     "start:order": "nest start order-service --watch",
