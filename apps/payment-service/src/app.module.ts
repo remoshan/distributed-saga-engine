@@ -3,8 +3,8 @@ import { postgresOptions } from '@app/common';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Order } from './order/entities/order.entity';
-import { OrderModule } from './order/order.module';
+import { Payment } from './payment/payment.entity';
+import { PaymentModule } from './payment/payment.module';
 
 @Module({
   imports: [
@@ -16,11 +16,11 @@ import { OrderModule } from './order/order.module';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) =>
-        postgresOptions(config, config.getOrThrow<string>('ORDER_DB_NAME'), [
-          Order,
+        postgresOptions(config, config.getOrThrow<string>('PAYMENT_DB_NAME'), [
+          Payment,
         ]),
     }),
-    OrderModule,
+    PaymentModule,
   ],
 })
 export class AppModule {}

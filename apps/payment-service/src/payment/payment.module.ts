@@ -7,14 +7,13 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ClientsModule } from '@nestjs/microservices';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Order } from './entities/order.entity';
-import { OrderController } from './order.controller';
-import { OrderEventsController } from './order.events.controller';
-import { OrderService } from './order.service';
+import { Payment } from './payment.entity';
+import { PaymentEventsController } from './payment.events.controller';
+import { PaymentService } from './payment.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Order]),
+    TypeOrmModule.forFeature([Payment]),
     IdempotencyModule,
     ClientsModule.registerAsync([
       {
@@ -25,7 +24,7 @@ import { OrderService } from './order.service';
       },
     ]),
   ],
-  controllers: [OrderController, OrderEventsController],
-  providers: [OrderService],
+  controllers: [PaymentEventsController],
+  providers: [PaymentService],
 })
-export class OrderModule {}
+export class PaymentModule {}

@@ -7,14 +7,13 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ClientsModule } from '@nestjs/microservices';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Order } from './entities/order.entity';
-import { OrderController } from './order.controller';
-import { OrderEventsController } from './order.events.controller';
-import { OrderService } from './order.service';
+import { InventoryEventsController } from './inventory.events.controller';
+import { InventoryService } from './inventory.service';
+import { StockItem } from './stock-item.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Order]),
+    TypeOrmModule.forFeature([StockItem]),
     IdempotencyModule,
     ClientsModule.registerAsync([
       {
@@ -25,7 +24,7 @@ import { OrderService } from './order.service';
       },
     ]),
   ],
-  controllers: [OrderController, OrderEventsController],
-  providers: [OrderService],
+  controllers: [InventoryEventsController],
+  providers: [InventoryService],
 })
-export class OrderModule {}
+export class InventoryModule {}

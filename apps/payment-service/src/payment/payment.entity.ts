@@ -1,37 +1,32 @@
-import { OrderLineItem } from '@app/common';
 import {
   Column,
   CreateDateColumn,
   Entity,
   Index,
   PrimaryGeneratedColumn,
-  UpdateDateColumn,
 } from 'typeorm';
 
-export enum OrderStatus {
-  // Semantic lock: the row is committed and visible, but marked in-flight so
-  // nothing mistakes it for a settled order while the saga runs.
-  PENDING = 'PENDING',
-  COMPLETED = 'COMPLETED',
-  CANCELLED = 'CANCELLED',
+export enum PaymentStatus {
+  SUCCEEDED = 'SUCCEEDED',
+  DECLINED = 'DECLINED',
 }
 
-// Postgres numeric arrives as a string.
 const numericTransformer = {
   to: (value: number): number => value,
   from: (value: string | null): number => (value === null ? 0 : Number(value)),
 };
 
-@Entity('orders')
-export class Order {
+@Entity('payments')
+export class Payment {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  @Index()
+  @Column({ type: 'varchar', length: 64 })
+  orderId: string;
+
   @Column({ type: 'varchar', length: 128 })
   customerId: string;
-
-  @Column({ type: 'jsonb' })
-  items: OrderLineItem[];
 
   @Column({
     type: 'numeric',
@@ -39,10 +34,10 @@ export class Order {
     scale: 2,
     transformer: numericTransformer,
   })
-  totalAmount: number;
+  amount: number;
 
-  @Column({ type: 'enum', enum: OrderStatus, default: OrderStatus.PENDING })
-  status: OrderStatus;
+  @Column({ type: 'enum', enum: PaymentStatus })
+  status: PaymentStatus;
 
   @Index()
   @Column({ type: 'varchar', length: 64 })
@@ -53,7 +48,4 @@ export class Order {
 
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
-
-  @UpdateDateColumn({ type: 'timestamptz' })
-  updatedAt: Date;
 }

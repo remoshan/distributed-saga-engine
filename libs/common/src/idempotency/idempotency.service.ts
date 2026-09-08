@@ -12,7 +12,9 @@ export class IdempotencyService {
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
     config: ConfigService,
   ) {
-    this.ttlSeconds = Number(config.get<string>('IDEMPOTENCY_TTL_SECONDS') ?? 86400);
+    this.ttlSeconds = Number(
+      config.get<string>('IDEMPOTENCY_TTL_SECONDS') ?? 86400,
+    );
   }
 
   // Scoped by consumer, not just eventId: payment_failed is consumed by both
@@ -22,7 +24,7 @@ export class IdempotencyService {
     return `saga:idempotency:${consumer}:${eventId}`;
   }
 
-  async claim(consumer: string, eventId: string): Promise<boolean> {
+  private async claim(consumer: string, eventId: string): Promise<boolean> {
     const result = await this.redis.set(
       this.key(consumer, eventId),
       new Date().toISOString(),
@@ -33,7 +35,7 @@ export class IdempotencyService {
     return result === 'OK';
   }
 
-  async release(consumer: string, eventId: string): Promise<void> {
+  private async release(consumer: string, eventId: string): Promise<void> {
     await this.redis.del(this.key(consumer, eventId));
   }
 
