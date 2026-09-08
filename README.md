@@ -1,19 +1,8 @@
-<h1 align="center">Distributed Saga Engine</h1>
+# Distributed Saga Engine
 
-<p align="center">
-  <strong>Event-driven microservices implementing the Choreographed Saga pattern</strong><br>
-  Distributed transactions and compensating rollbacks across service boundaries —
-  without a central orchestrator, and without holding locks across databases.
-</p>
-
-<p align="center">
-  <img alt="NestJS" src="https://img.shields.io/badge/NestJS-11-E0234E?logo=nestjs&logoColor=white">
-  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white">
-  <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white">
-  <img alt="Redis" src="https://img.shields.io/badge/Redis-7-DC382D?logo=redis&logoColor=white">
-  <img alt="Docker" src="https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white">
-  <img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-green.svg">
-</p>
+An event-driven microservices system for managing distributed transactions and
+compensating failure workflows across independent service databases — using the
+Choreographed Saga pattern.
 
 ---
 
